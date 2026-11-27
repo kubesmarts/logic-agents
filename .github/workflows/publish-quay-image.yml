@@ -1,0 +1,83 @@
+name: Publish multi-platform image to Quay
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: Artifact containing <artifact_name>.tar.gz in OCI archive format.
+        required: true
+        type: string
+      image_name:
+        description: Quay namespace and image name.
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+      additional_tags:
+        description: Comma-separated aliases for the verified image.
+        type: string
+        default: ''
+    secrets:
+      QUAY_ROBOT_ACCOUNT:
+        required: true
+      QUAY_ROBOT_TOKEN:
+        required: true
+    outputs:
+      digest:
+        description: Published multi-platform manifest digest.
+        value: ${{ jobs.publish.outputs.digest }}
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ inputs.artifact_name }}
+      - name: Install Skopeo
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+      - name: Extract OCI archive
+        env:
+          ARTIFACT: ${{ inputs.artifact_name }}
+        run: gunzip -- "${ARTIFACT}.tar.gz"
+      - name: Log in to Quay
+        env:
+          ACCOUNT: ${{ secrets.QUAY_ROBOT_ACCOUNT }}
+          TOKEN: ${{ secrets.QUAY_ROBOT_TOKEN }}
+        run: |
+          printf '%s' "$TOKEN" | skopeo login --authfile "$RUNNER_TEMP/quay-auth.json" \
+            --username "$ACCOUNT" --password-stdin quay.io
+      - name: Publish and verify image
+        id: publish
+        shell: bash
+        env:
+          ARTIFACT: ${{ inputs.artifact_name }}
+          IMAGE: ${{ inputs.image_name }}
+          TAG: ${{ inputs.image_tag }}
+          ALIASES: ${{ inputs.additional_tags }}
+        run: |
+          auth="$RUNNER_TEMP/quay-auth.json"
+          image="docker://quay.io/$IMAGE"
+          skopeo copy --all --authfile "$auth" --digestfile "$RUNNER_TEMP/digest" \
+            "oci-archive:$ARTIFACT.tar" "$image:$TAG"
+          digest=$(cat "$RUNNER_TEMP/digest")
+          skopeo inspect --raw --authfile "$auth" "$image@$digest" > "$RUNNER_TEMP/manifest.json"
+          jq -e 'any(.manifests[].platform; .os == "linux" and .architecture == "amd64") and
+                 any(.manifests[].platform; .os == "linux" and .architecture == "arm64")' \
+            "$RUNNER_TEMP/manifest.json" > /dev/null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published quay.io/$IMAGE:$TAG at $digest" >> "$GITHUB_STEP_SUMMARY"
+
+          IFS=',' read -ra tags <<< "$ALIASES"
+          for alias in "${tags[@]}"; do
+            alias="${alias#"${alias%%[![:space:]]*}"}"
+            alias="${alias%"${alias##*[![:space:]]}"}"
+            skopeo copy --all --preserve-digests --authfile "$auth" "$image@$digest" "$image:$alias"
+            echo "Tagged quay.io/$IMAGE:$alias" >> "$GITHUB_STEP_SUMMARY"
+          done
