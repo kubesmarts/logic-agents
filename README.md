@@ -4,7 +4,9 @@ Shared contribution guidance, agent skills and GitHub Actions for Logic Apps, Op
 
 ## Distribute instructions
 
-From this repository, run `python3 scripts/sync.py ../logic-operator`. Substitute the Apps or Consoles checkout as needed. Commit the resulting files in the product through its usual review process. A standalone clone can then read its local copy. To verify the snapshot, check out the revision listed in the product's .logic-agents/revision in this source repository and repeat with --check.
+Each product tracks a bootstrap in AGENTS.md. It checks its ignored local copies on session start and before PR submission. A sibling logic-agents working tree takes precedence. Without one, the bootstrap clones or updates the published repository in the ignored cache. Before a PR, sync with `--pre-pr` to compare the source with published main. Sync records managed files in the ignored cache and retires them on subsequent runs. Merge shared guidance before adopting its product entry points.
+
+Use `logic-start-work` at startup and `logic-prepare-pr` when preparing a PR. [AGENTS.md](AGENTS.md) links directly to each procedure.
 
 ## Workflow review and adoption
 
@@ -12,7 +14,7 @@ From this repository, run `python3 scripts/sync.py ../logic-operator`. Substitut
 | --- | --- |
 | PR titles | Reusable pr-title.yml preserves Apps' semantic title check. |
 | Pages | build-antora packages the Node 24 install and build used by Operator and Consoles. Apps builds with Maven. Keep triggers, upload paths and environment permissions in each caller. |
-| Image publication | Apps and Operator both use Skopeo and Quay. Their image matrices, additional tags and release orchestration differ. Keep these jobs local until their inputs and retry behavior have a common contract. |
+| Image publication | Apps and Operator build their own OCI archives and select version and alias tags. The shared publish-quay-image.yml workflow uploads the archive to Quay, verifies Linux amd64 and arm64, applies aliases and returns the published digest. |
 | Validation | Operator runs Go, generation, gateway and KIND checks. Apps builds and tests Data Index and checks Quarkus Flow snapshots. Consoles runs frontend and browser checks and reuses its CI on release. |
 | Releases | Keep version sources, tag creation, Helm and CRD packaging, image publication, launcher builds and checksums with each product. |
 | Maintenance | Apps' knowledge graph refresh operates on its own repository data. |

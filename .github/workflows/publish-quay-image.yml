@@ -64,13 +64,15 @@ jobs:
         run: |
           auth="$RUNNER_TEMP/quay-auth.json"
           image="docker://quay.io/$IMAGE"
+          verify_platforms() {
+            jq -e 'any(.manifests[].platform; .os == "linux" and .architecture == "amd64") and
+                   any(.manifests[].platform; .os == "linux" and .architecture == "arm64")' > /dev/null
+          }
+          skopeo inspect --raw "oci-archive:$ARTIFACT.tar" | verify_platforms
           skopeo copy --all --authfile "$auth" --digestfile "$RUNNER_TEMP/digest" \
             "oci-archive:$ARTIFACT.tar" "$image:$TAG"
           digest=$(cat "$RUNNER_TEMP/digest")
-          skopeo inspect --raw --authfile "$auth" "$image@$digest" > "$RUNNER_TEMP/manifest.json"
-          jq -e 'any(.manifests[].platform; .os == "linux" and .architecture == "amd64") and
-                 any(.manifests[].platform; .os == "linux" and .architecture == "arm64")' \
-            "$RUNNER_TEMP/manifest.json" > /dev/null
+          skopeo inspect --raw --authfile "$auth" "$image@$digest" | verify_platforms
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "Published quay.io/$IMAGE:$TAG at $digest" >> "$GITHUB_STEP_SUMMARY"
 

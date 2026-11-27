@@ -1,0 +1,1 @@
+For an issue owned by the current repo use issues/42. From another checkout use issues/<owning-repo>-42. With a missing issue or unapproved branch switch ask the human before editing. A second sync of unchanged content should pass --check.
