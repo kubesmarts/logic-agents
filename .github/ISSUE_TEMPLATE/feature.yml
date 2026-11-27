@@ -1,0 +1,16 @@
+name: Feature request
+description: Describe a user need and how to verify it.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What problem should this solve?"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "How will we know it works?"
+    validations:
+      required: true
